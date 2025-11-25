@@ -32,7 +32,7 @@ I tested the model with my own songs to analyze how it interprets "unseen" genre
   <img src="results/heatmap_9624 JAZZ CLUB AR.wav.jpg" width="400" alt="Heatmap Jazz Club">
 </p>
 
-* **Context:** The title is inspired by **Maison Margiela's 'Replica Jazz Club' fragrance**, not the music genre. The track is actually **Singing Rap** (Melodic Rap).
+* **Context:** The title is inspired by **Maison Margiela's 'Replica Jazz Club' fragrance**, not the music genre. The track is actually **Melodic Rap**.
 * **AI Focus:** The heatmap highlights the **bottom area (Low Frequencies/Bass)**.
 * **Insight:** The AI was not misled by the semantic title "Jazz". Instead, it correctly identified the acoustic features of **Singing Rap**—which blends rhythmic rapping with pop-like melodies and modern bass mixing—and classified it as **'POP'**, showing its ability to analyze the actual audio texture over metadata.
 
