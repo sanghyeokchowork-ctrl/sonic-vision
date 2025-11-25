@@ -11,7 +11,7 @@
 </div>
 
 ## 1. Project Overview
-* **Motivation:** As an R&B artist ('PARFUMDEWALKER'), I noticed that standard open-source datasets (like GTZAN) lack modern 'R&B' or 'Singing Rap' categories. I wanted to investigate **how AI interprets these "unseen" genres** based on limited training data.
+* **Motivation:** As an R&B artist ('PARFUMDEWALKER'), I noticed that standard open-source datasets (like GTZAN) lack modern 'R&B' or 'Melodic Rap' categories. I wanted to investigate **how AI interprets these "unseen" genres** based on limited training data.
 * **Goal:** To build a full-stack AI application that classifies genres, visualizes decision-making processes (Heatmaps), recommends similar tracks, and **deconstructs audio into stems (Vocals/Drums/Bass)**.
 
 ## 2. Key Features
