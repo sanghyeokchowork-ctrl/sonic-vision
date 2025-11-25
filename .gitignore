@@ -24,3 +24,5 @@ env/
 .env
 # Ignore my large audio files
 data/my_songs/
+# Ignore Streamlit temp files
+temp_*
