@@ -22,3 +22,5 @@ models/*.pth
 venv/
 env/
 .env
+# Ignore my large audio files
+data/my_songs/
