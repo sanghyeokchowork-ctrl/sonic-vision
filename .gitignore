@@ -1,0 +1,24 @@
+# ==========================
+# Python & PyCharm Ignored
+# ==========================
+__pycache__/
+*.py[cod]
+.idea/
+.DS_Store
+
+# ==========================
+# Data (NEVER UPLOAD THESE)
+# ==========================
+# Ignore the raw audio files
+data/raw/
+# Ignore the generated spectrogram images
+data/processed/
+# Ignore model checkpoints (large files)
+models/*.pth
+
+# ==========================
+# Virtual Environment
+# ==========================
+venv/
+env/
+.env

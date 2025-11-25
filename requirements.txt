@@ -1,0 +1,43 @@
+# ==========================================
+# Sonic Vision Project Requirements
+# ==========================================
+
+# 1. Data Manipulation & Math
+# Used for array operations and dataframe management
+numpy
+pandas
+
+# 2. Visualization
+# Used for plotting spectrograms and training graphs
+matplotlib
+seaborn
+
+# 3. Machine Learning Utils
+# Used for t-SNE, data splitting, and metrics
+scikit-learn
+
+# 4. Audio Processing
+# Core libraries for loading and transforming audio files
+librosa
+soundfile
+pydub
+
+# 5. Deep Learning (PyTorch)
+# Standard CPU version (If you have a GPU, install specific CUDA version manually)
+torch
+torchvision
+torchaudio
+
+# 6. Utilities
+# Progress bar for training loops
+tqdm
+
+# 7. Explainable AI (XAI)
+# Used for visualizing model attention (Heatmaps)
+grad-cam
+
+# 8. Jupyter Notebook Support
+# For interactive experimentation in PyCharm
+jupyter
+notebook
+ipykernel
