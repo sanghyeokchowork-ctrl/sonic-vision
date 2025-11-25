@@ -27,7 +27,7 @@
 ## 4. Analysis Results (Case Study)
 I tested the model with my own songs to analyze how it interprets "unseen" genres like R&B.
 
-### Case 1: JAZZ CLUB (Singing Rap) → Predicted: POP
+### Case 1: JAZZ CLUB (feat. AstralCube) (Melodic Rap) → Predicted: POP
 <p align="center">
   <img src="results/heatmap_9624 JAZZ CLUB AR.wav.jpg" width="400" alt="Heatmap Jazz Club">
 </p>
@@ -44,7 +44,7 @@ I tested the model with my own songs to analyze how it interprets "unseen" genre
 * **AI Focus:** The red zones are concentrated in **dense blocks at the bottom (Sub-bass)**.
 * **Insight:** The model successfully identified the **808 sub-bass and kick drum patterns**, which are signature elements of Hip-Hop. This demonstrates the model's ability to recognize rhythmic textures.
 
-### Case 3: Serenade Pt. II (R&B) → Predicted: COUNTRY
+### Case 3: Serenade, Pt. II (R&B) → Predicted: COUNTRY
 <p align="center">
   <img src="results/heatmap_9624 SERENADE PT. II AR.wav.jpg" width="400" alt="Heatmap Serenade">
 </p>
