@@ -2,28 +2,26 @@ import streamlit as st
 import os
 import torch
 import numpy as np
-import librosa
 import matplotlib.pyplot as plt
 from PIL import Image
-import cv2
+import subprocess
+import sys
 
-# Import our backend logic
-from model import get_model
-from recommend import get_feature_extractor, extract_dataset_features, process_target_song, recommend_songs
-from explain import save_gradcam
-from predict import process_audio
-# Import Separation Module
-from separate import separate_audio
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # ==========================================
-# Configuration & Caching
+# Configuration
 # ==========================================
-st.set_page_config(page_title="Sonic Vision", page_icon="🎵", layout="wide")
+st.set_page_config(page_title="Sonic Vision Pro", page_icon="🎹", layout="wide")
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 
 @st.cache_resource
 def load_system_resources():
+    # Lazy imports to prevent startup locks
+    from model import get_model
+    from recommend import get_feature_extractor, extract_dataset_features
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
     model_path = os.path.join(project_root, 'models', 'best_model.pth')
@@ -39,114 +37,170 @@ def load_system_resources():
     return cls_model, fe_model, db_vectors, model_path
 
 
-with st.spinner("🚀 Booting up AI Engine... (Indexing 1,000 songs)"):
-    cls_model, fe_model, db_vectors, model_path = load_system_resources()
-
 CLASSES = ['blues', 'classical', 'country', 'disco', 'hiphop',
            'jazz', 'metal', 'pop', 'reggae', 'rock']
 
 # ==========================================
 # UI Layout
 # ==========================================
-st.title("🎵 Sonic Vision: Ultimate AI Music Tool")
+st.title("🎹 Sonic Vision Pro: AI Music Workstation")
 st.markdown("""
-**Analyze, Visualize, and Deconstruct Music.** Experience the power of Deep Learning: from Classification to **Source Separation (Stem Splitting)**.
+**The All-in-One AI Tool for Musicians.** Analyze Genre, Visualize Attention, Deconstruct Stems, and Convert to MIDI.
 """)
 
-st.sidebar.header("About Project")
+st.sidebar.header("System Info")
+st.sidebar.success("System Ready (Process Isolation Active)")
 st.sidebar.info("""
-**Developed by PARFUMDEWALKER**
-- **Analyze:** Genre Classification
-- **Explain:** XAI (Grad-CAM)
-- **Deconstruct:** Source Separation (U-Net)
+**Features:**
+- **Vision:** ResNet18 + Grad-CAM
+- **Remix:** Demucs (SOTA Separation)
+- **Lyrics:** Whisper (Multimodal)
+- **MIDI:** Basic Pitch (Audio-to-MIDI)
 """)
 
-uploaded_file = st.file_uploader("Upload an MP3/WAV file", type=["mp3", "wav"])
+# Load Core AI
+with st.spinner("🚀 Booting up Core AI..."):
+    cls_model, fe_model, db_vectors, model_path = load_system_resources()
+
+uploaded_file = st.file_uploader("Upload Track (MP3/WAV)", type=["mp3", "wav"])
 
 if uploaded_file is not None:
     temp_path = os.path.join("temp_audio.wav")
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # Layout: Tabs for different tasks
-    tab_analyze, tab_remix = st.tabs(["📊 Analysis & XAI", "🎛️ Remix Station (Source Separation)"])
+    tab_analyze, tab_remix, tab_multimodal = st.tabs(["📊 Analysis", "🎛️ Remix", "📝 Lyrics & MIDI"])
 
-    # === TAB 1: Analysis (Existing Features) ===
+    # === TAB 1: Analysis ===
     with tab_analyze:
-        col1, col2 = st.columns([1, 1.5])
-        detected_genre = None
+        from predict import process_audio
+        from recommend import process_target_song, recommend_songs
+        from explain import save_gradcam
 
-        with col2:
+        c1, c2 = st.columns([1, 1.5])
+
+        with c2:
             st.subheader("1. Genre Classification")
-            with st.spinner("Listening..."):
-                inputs = process_audio(temp_path)
-                if inputs is not None:
-                    with torch.no_grad():
-                        outputs = cls_model(inputs)
-                        probs = torch.nn.functional.softmax(outputs, dim=1)
-                        avg_probs = torch.mean(probs, dim=0).cpu().numpy()
+            inputs = process_audio(temp_path)
+            if inputs is not None:
+                with torch.no_grad():
+                    outputs = cls_model(inputs)
+                    probs = torch.nn.functional.softmax(outputs, dim=1)
+                    avg_probs = torch.mean(probs, dim=0).cpu().numpy()
 
-                    top3_indices = avg_probs.argsort()[-3:][::-1]
-                    top_genre = CLASSES[top3_indices[0]].upper()
-                    detected_genre = top_genre
-                    top_score = avg_probs[top3_indices[0]] * 100
+                top3 = avg_probs.argsort()[-3:][::-1]
+                top_genre = CLASSES[top3[0]].upper()
+                st.metric("Primary Genre", top_genre, f"{avg_probs[top3[0]] * 100:.1f}%")
+                st.bar_chart({CLASSES[i].upper(): avg_probs[i] for i in top3})
 
-                    st.metric(label="Primary Genre", value=f"{top_genre}", delta=f"{top_score:.1f}% Confidence")
-                    chart_data = {CLASSES[i].upper(): avg_probs[i] for i in top3_indices}
-                    st.bar_chart(chart_data)
+                # Insight Logic
+                if top_genre in ['JAZZ', 'POP'] and "jazz" in uploaded_file.name.lower():
+                    st.info(
+                        f"💡 **Insight:** Title implies 'Jazz', but AI detected **{top_genre}** features (Modern Bass/Mixing).")
+                elif top_genre == 'COUNTRY':
+                    st.info(f"💡 **Insight:** AI mapped the **Vocal/Acoustic** texture to 'COUNTRY'.")
+                elif top_genre == 'HIPHOP':
+                    st.info(f"💡 **Insight:** AI identified strong **Sub-bass & Rhythmic** patterns.")
 
+            st.divider()
             st.subheader("2. Similar Songs")
-            with st.spinner("Searching Database..."):
-                target_vec = process_target_song(fe_model, temp_path)
-                if target_vec is not None:
-                    recs = recommend_songs(target_vec, db_vectors)
-                    for name, score in recs:
-                        st.write(f"**{name}** (Similarity: `{score * 100:.1f}%`)")
-                        st.progress(int(score * 100))
+            target_vec = process_target_song(fe_model, temp_path)
+            if target_vec is not None:
+                recs = recommend_songs(target_vec, db_vectors, top_k=3)
+                for name, score in recs:
+                    st.write(f"**{name}** (`{score * 100:.1f}%`)")
+                    st.progress(int(score * 100))
 
-        with col1:
-            st.subheader("3. Explainable AI (XAI)")
+        with c1:
+            st.subheader("3. AI Vision (XAI)")
             st.audio(uploaded_file)
+            heatmap_path = "temp_heatmap.jpg"
+            if st.button("🔍 Generate Heatmap"):
+                with st.spinner("Analyzing..."):
+                    try:
+                        save_gradcam(temp_path, model_path, heatmap_path)
+                        st.image(heatmap_path, caption="AI Attention", width=400)  # use_container_width 대신 width 사용 가능
+                    except:
+                        st.error("Heatmap failed.")
 
-            # Grad-CAM
-            with st.expander("🔍 See AI Attention (Grad-CAM)", expanded=True):
-                heatmap_path = "temp_heatmap.jpg"
+    # === TAB 2: Remix Station ===
+    with tab_remix:
+        st.header("🎛️ Stem Separation")
+        if st.button("🔥 Start HQ Separation"):
+            with st.spinner("Separating... (Using Demucs)"):
+                from separate import separate_audio
+
                 try:
-                    save_gradcam(temp_path, model_path, heatmap_path)
-                    st.image(heatmap_path, caption="Red areas = What AI focused on", use_container_width=True)
+                    stems = separate_audio(temp_path, output_dir="temp_stems")
+                    if stems:
+                        st.success("Done!")
+                        st.session_state['stems'] = stems
+
+                        # 4-Column Grid
+                        c1, c2 = st.columns(2)
+                        c3, c4 = st.columns(2)
+                        with c1:
+                            st.markdown("##### 🎤 Vocals")
+                            st.audio(stems.get('vocals'))
+                        with c2:
+                            st.markdown("##### 🥁 Drums")
+                            st.audio(stems.get('drums'))
+                        with c3:
+                            st.markdown("##### 🎸 Bass")
+                            st.audio(stems.get('bass'))
+                        with c4:
+                            st.markdown("##### 🎹 Other")
+                            st.audio(stems.get('other'))
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # === TAB 2: Remix Station (New Feature!) ===
-    with tab_remix:
-        st.header("🎛️ AI Source Separation (U-Net)")
-        st.markdown("Isolate Vocals, Drums, Bass, and Other instruments using Deep Learning.")
+    # === TAB 3: Multimodal ===
+    with tab_multimodal:
+        st.header("📝 Lyrics & MIDI")
+        c_lyrics, c_midi = st.columns(2)
 
-        st.info("ℹ️ Using Meta's 'htdemucs' model. Highest quality, but takes 3~5 mins on CPU.")
-        if st.button("🔥 Start HQ Separation"):
-            # [Update] UI Text Updated to reflect CPU usage
-            with st.spinner("Splitting Audio Stems... (Processing on CPU for stability)"):
-                try:
-                    # Run Separation
-                    stems = separate_audio(temp_path, output_dir="temp_stems")
+        with c_lyrics:
+            st.subheader("🗣️ Lyrics")
+            if st.button("📝 Transcribe (Whisper)"):
+                with st.spinner("Transcribing..."):
+                    from transcribe import transcribe_audio
 
-                    if not stems:
-                        st.error("Separation returned empty results. Check inputs.")
-                    else:
-                        st.success("Separation Complete! Listen to the stems below.")
+                    target = st.session_state.get('stems', {}).get('vocals', temp_path)
+                    text, lang = transcribe_audio(target)
+                    if text:
+                        st.success(f"Language: {lang}")
+                        st.text_area("Lyrics", text, height=250)
 
-                        # Display Players in Grid
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown("### 🎤 Vocals")
-                            st.audio(stems.get('vocals'))
-                            st.markdown("### 🥁 Drums")
-                            st.audio(stems.get('drums'))
-                        with c2:
-                            st.markdown("### 🎸 Bass")
-                            st.audio(stems.get('bass'))
-                            st.markdown("### 🎹 Other (Inst)")
-                            st.audio(stems.get('other'))
+        with c_midi:
+            st.subheader("🎹 MIDI Converter")
+            # Use Bass stem if available
+            target_for_midi = st.session_state.get('stems', {}).get('bass', temp_path)
 
-                except Exception as e:
-                    st.error(f"Separation failed: {e}")
+            if 'stems' in st.session_state:
+                st.success("✅ Using separated **Bass** stem.")
+            else:
+                st.caption("⚠️ Using original track.")
+
+            if st.button("🎼 Convert to MIDI"):
+                with st.spinner("Converting... (Running Basic Pitch in Subprocess)"):
+                    # [CRITICAL FIX] Run MIDI conversion in a SEPARATE PROCESS
+                    output_dir = "temp_midi"
+
+                    cmd = [sys.executable, "src/midify.py", target_for_midi, output_dir]
+
+                    try:
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+
+                        midi_file = os.path.join(output_dir, "converted.mid")
+
+                        if os.path.exists(midi_file):
+                            st.success("Conversion Complete!")
+                            with open(midi_file, "rb") as f:
+                                st.download_button("⬇️ Download MIDI File", f, file_name="converted.mid")
+                        else:
+                            st.error("Conversion failed.")
+                            st.text("Error Log:")
+                            st.code(result.stderr)
+
+                    except Exception as e:
+                        st.error(f"Subprocess Error: {e}")
