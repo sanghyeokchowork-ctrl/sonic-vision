@@ -1,15 +1,3 @@
----
-title: {{Sonic Vision Pro}}
-emoji: {{{🎹}}
-colorFrom: {{blue}}
-colorTo: {{purple}}
-sdk: {{streamlit}}
-sdk_version: "{{1.31.0}}"
-app_file: src/app.py
-pinned: false
----
-
-
 # 🎵 Sonic Vision: AI Music Analyzer & Deconstructor
 
 > **"How does AI listen to music compared to an artist?"**
