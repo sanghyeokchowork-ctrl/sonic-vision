@@ -26,3 +26,6 @@ env/
 data/my_songs/
 # Ignore Streamlit temp files
 temp_*
+# Ignore generated audio stems
+results/stems/
+*.wav
