@@ -7,7 +7,7 @@ from PIL import Image
 import subprocess
 import sys
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # ==========================================
 # Configuration
@@ -69,10 +69,12 @@ if uploaded_file is not None:
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    tab_analyze, tab_remix, tab_multimodal = st.tabs(["📊 Analysis", "🎛️ Remix", "📝 Lyrics & MIDI"])
+    # [Fix] Define tab variables explicitly
+    tab_analyze, tab_remix, tab_multimodal = st.tabs(["📊 Analysis (Vision)", "🎛️ Remix (Demucs)", "📝 Lyrics & MIDI"])
 
     # === TAB 1: Analysis ===
     with tab_analyze:
+        # Lazy Imports
         from predict import process_audio
         from recommend import process_target_song, recommend_songs
         from explain import save_gradcam
@@ -90,7 +92,9 @@ if uploaded_file is not None:
 
                 top3 = avg_probs.argsort()[-3:][::-1]
                 top_genre = CLASSES[top3[0]].upper()
-                st.metric("Primary Genre", top_genre, f"{avg_probs[top3[0]] * 100:.1f}%")
+                top_score = avg_probs[top3[0]] * 100
+
+                st.metric("Primary Genre", top_genre, f"{top_score:.1f}% Confidence")
                 st.bar_chart({CLASSES[i].upper(): avg_probs[i] for i in top3})
 
                 # Insight Logic
@@ -114,26 +118,29 @@ if uploaded_file is not None:
         with c1:
             st.subheader("3. AI Vision (XAI)")
             st.audio(uploaded_file)
+
             heatmap_path = "temp_heatmap.jpg"
             if st.button("🔍 Generate Heatmap"):
-                with st.spinner("Analyzing..."):
+                with st.spinner("Analyzing spectrogram..."):
                     try:
                         save_gradcam(temp_path, model_path, heatmap_path)
-                        st.image(heatmap_path, caption="AI Attention", width=400)  # use_container_width 대신 width 사용 가능
+                        st.image(heatmap_path, caption="AI Attention", width=400)
                     except:
                         st.error("Heatmap failed.")
 
     # === TAB 2: Remix Station ===
     with tab_remix:
         st.header("🎛️ Stem Separation")
+        st.info("ℹ️ Using **Meta's Demucs (htdemucs)**. Processing takes 3~5 mins on CPU.")
+
         if st.button("🔥 Start HQ Separation"):
-            with st.spinner("Separating... (Using Demucs)"):
+            with st.spinner("Separating Vocals, Drums, Bass, Other... (Please wait)"):
                 from separate import separate_audio
 
                 try:
                     stems = separate_audio(temp_path, output_dir="temp_stems")
                     if stems:
-                        st.success("Done!")
+                        st.success("Separation Complete!")
                         st.session_state['stems'] = stems
 
                         # 4-Column Grid
@@ -152,7 +159,7 @@ if uploaded_file is not None:
                             st.markdown("##### 🎹 Other")
                             st.audio(stems.get('other'))
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Separation Error: {e}")
 
     # === TAB 3: Multimodal ===
     with tab_multimodal:
@@ -189,7 +196,7 @@ if uploaded_file is not None:
                     cmd = [sys.executable, "src/midify.py", target_for_midi, output_dir]
 
                     try:
-                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
                         midi_file = os.path.join(output_dir, "converted.mid")
 

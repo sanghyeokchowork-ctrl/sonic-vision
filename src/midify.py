@@ -1,18 +1,7 @@
 import os
 import sys
 
-# [CRITICAL] Disable GPU for TensorFlow on Mac (Metal) and CUDA
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-# Force CPU using TensorFlow Config (맥북 Metal 가속 끄기)
-try:
-    import tensorflow as tf
-
-    # Hide GPUs from TensorFlow
-    tf.config.set_visible_devices([], 'GPU')
-    print("✅ TensorFlow is forced to use CPU only.")
-except Exception as e:
-    print(f"⚠️ Could not configure TensorFlow: {e}")
 
 from basic_pitch.inference import predict_and_save, ICASSP_2022_MODEL_PATH
 

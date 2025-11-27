@@ -2,6 +2,7 @@ import os
 import subprocess
 import shutil
 import torchaudio
+import torch
 
 # ==========================================
 # Configuration
@@ -9,23 +10,27 @@ import torchaudio
 # htdemucs: Hybrid Transformer Demucs (Meta's latest & best model)
 # v4: Optimized for both quality and speed
 MODEL_NAME = "htdemucs"
+DEVICE = "cpu"
 
 
 def separate_audio(file_path, output_dir="temp_stems"):
     """
-    Separates audio using Meta's Demucs (SOTA) via subprocess.
+    Separates audio using Meta's Demucs (SOTA).
     """
     filename = os.path.basename(file_path)
     print(f"🔪 Separating Stems (High Quality - Demucs): {filename}...")
 
     # 1. Clean previous results if any
     if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
+        try:
+            shutil.rmtree(output_dir)
+        except Exception as e:
+            print(f"⚠️ Warning clearing temp folder: {e}")
+
     os.makedirs(output_dir, exist_ok=True)
 
     # 2. Construct Command
     # demucs -n htdemucs --out [output_dir] [input_file] --device cpu
-    # We force CPU usage for stability on Mac (OOM prevention)
     cmd = [
         "demucs",
         "-n", MODEL_NAME,
@@ -39,14 +44,15 @@ def separate_audio(file_path, output_dir="temp_stems"):
     try:
         # Run the command and wait for it to finish
         subprocess.run(cmd, check=True)
-        # print(result.stdout.decode()) # Uncomment for debug
     except subprocess.CalledProcessError as e:
-        print(f"❌ Demucs Error: {e.stderr.decode()}")
+        print(f"❌ Demucs Error: {e}")
+        return {}
+    except FileNotFoundError:
+        print("❌ Error: 'demucs' command not found. Please run 'pip install demucs'")
         return {}
 
     # 3. Locate and Move Files
     # Demucs saves to: output_dir/htdemucs/song_name/vocals.wav
-    # We want to move them to: output_dir/vocals.wav
 
     # Filename without extension (Demucs creates a folder with this name)
     song_name_no_ext = os.path.splitext(filename)[0]
@@ -56,8 +62,15 @@ def separate_audio(file_path, output_dir="temp_stems"):
     target_names = ['vocals', 'drums', 'bass', 'other']
 
     if not os.path.exists(demucs_output_folder):
-        print(f"❌ Could not find output folder: {demucs_output_folder}")
-        return {}
+        # Fallback check: Sometimes Demucs behaves differently with spaces or special chars
+        # Try searching for any subfolder
+        subfolders = [f for f in os.listdir(os.path.join(output_dir, MODEL_NAME)) if
+                      os.path.isdir(os.path.join(output_dir, MODEL_NAME, f))]
+        if subfolders:
+            demucs_output_folder = os.path.join(output_dir, MODEL_NAME, subfolders[0])
+        else:
+            print(f"❌ Could not find output folder: {demucs_output_folder}")
+            return {}
 
     for target in target_names:
         src_path = os.path.join(demucs_output_folder, f"{target}.wav")
