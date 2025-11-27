@@ -43,7 +43,7 @@ I analyzed my own tracks to test the model's adaptability.
 * **AI Focus:** The heatmap highlights the **bottom area (Low Frequencies/Bass)**.
 * **Insight:** The AI was not misled by the text title "Jazz". Instead, it correctly identified the **modern mixing balance (strong low-end & kick)** characteristic of Pop/Hip-Hop, proving it analyzes actual audio textures rather than metadata.
 
-### Case 2: Lawson. (Hip-Hop) → Predicted: HIPHOP
+### Case 2: Lawson. (Trapsoul) → Predicted: HIPHOP
 <p align="center">
   <img src="results/heatmap_9624 Lawson. AR.wav.jpg" width="400" alt="Heatmap Lawson">
 </p>
