@@ -1,4 +1,13 @@
-title: Sonic Vision Pro emoji: 🎹 colorFrom: blue colorTo: purple sdk: streamlit sdk_version: 1.31.0 app_file: src/app.py pinned: false
+---
+title: {{Sonic Vision Pro}}
+emoji: {{🎹}}  
+colorFrom: {{blue}}  
+colorTo: {{purple}}  
+sdk: {{docker}}  
+sdk_version: "{{1.31.0}}"  
+app_file: src/app.py  
+pinned: false  
+---  
 
 # 🎵 Sonic Vision: AI Music Analyzer & Deconstructor
 
