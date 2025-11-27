@@ -4,7 +4,7 @@ colorFrom: {{blue}}
 colorTo: {{purple}} 
 sdk: {{streamlit}} 
 sdk_version: "{{1.31.0}}" 
-app_file: src/app.py 
+app_file: app.py 
 pinned: false
 ---
 
