@@ -112,7 +112,7 @@ python src/prepare_vocals.py
 # 2. Generate CSV & Train
 python src/vocal_timbre_train.py
 
-6. Engineering Challenges & Solutions
+## 6. Engineering Challenges & Solutions
 1. Data Scarcity for "Vocal Timbre"
 Issue: There are no public datasets labeled with abstract tags like "Breathy" or "Warm".
 
