@@ -1,231 +1,155 @@
 import os
 import torch
-import torch.nn as nn
 import numpy as np
 import librosa
-from torchvision import transforms, datasets
-from torch.utils.data import DataLoader
+from torchvision import transforms
 from PIL import Image
-from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
-import matplotlib.pyplot as plt  # For spectrogram generation
+from sklearn.metrics.pairwise import cosine_similarity
+import matplotlib.pyplot as plt
 
-# Import our model structure
-from model import get_model
+# Siamese Model Import
+from siamese_model import SiameseNetwork
 
 # ==========================================
 # Configuration
 # ==========================================
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
-BATCH_SIZE = 64
 IMG_SIZE = 224
 
 
-def get_feature_extractor(model_path):
-    """
-    Loads the trained model and removes the final classification layer.
-    Output: 512-dimensional feature vector instead of class probabilities.
-    """
-    # 1. Load trained model
-    model = get_model(num_classes=10, device=DEVICE)
-    model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-
-    # 2. Replace the last layer (fc) with Identity
-    # This makes the model return the 512 features directly
-    model.fc = nn.Identity()
+def load_siamese_model(model_path):
+    """학습된 샴 네트워크 로드"""
+    print(f"🏗️ Loading Siamese Network from {os.path.basename(model_path)}...")
+    model = SiameseNetwork().to(DEVICE)
+    if os.path.exists(model_path):
+        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+    else:
+        print("⚠️ Warning: Model file not found. Recommendations will be random.")
     model.eval()
     return model
 
 
-def extract_dataset_features(model, data_dir):
+def audio_to_tensor(audio_path):
     """
-    Extracts features for ALL songs in the GTZAN dataset.
-    Returns: A dictionary { 'genre/song_name': vector }
+    오디오(.wav) -> 멜 스펙트로그램 이미지 -> 텐서 변환
+    (Siamese Network 입력용)
     """
-    print("running feature extraction database...")
+    try:
+        # 1. Load Audio (3초만 사용 - 대표 구간)
+        y, sr = librosa.load(audio_path, sr=22050, duration=3.0)
 
-    # Define Transforms
+        # 길이가 짧으면 패딩
+        target_len = 22050 * 3
+        if len(y) < target_len:
+            y = np.pad(y, (0, target_len - len(y)))
+        else:
+            y = y[:target_len]
+
+        # 2. Spectrogram
+        mels = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
+        log_mels = librosa.power_to_db(mels, ref=np.max)
+
+        # 3. Save to Buffer (Matplotlib 없이 픽셀값 변환)
+        # 속도를 위해 plt 대신 min-max 정규화로 직접 이미지 생성
+        min_val = log_mels.min()
+        max_val = log_mels.max()
+        img_arr = (log_mels - min_val) / (max_val - min_val) * 255
+        img_arr = img_arr.astype(np.uint8)
+
+        # PIL Image로 변환 (Resize를 위해)
+        img = Image.fromarray(img_arr).convert('RGB')  # 3채널 복사
+
+        # 4. Transform
+        transform = transforms.Compose([
+            transforms.Resize((IMG_SIZE, IMG_SIZE)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        return transform(img).unsqueeze(0).to(DEVICE)
+
+    except Exception as e:
+        print(f"❌ Error processing {audio_path}: {e}")
+        return None
+
+
+def build_database_index(model, data_dir):
+    """
+    데이터셋 폴더(GTZAN 등)를 스캔하여 모든 곡의 임베딩 벡터를 미리 계산합니다.
+    Returns: { 'filename': vector (numpy array) }
+    """
+    print("📂 Building Similarity Index (This may take a while)...")
+
+    vectors = {}
+
+    # data/processed 폴더가 있다면 이미지를 바로 씀 (빠름)
+    # 없다면 data/raw 오디오를 변환 (느림)
+
+    # 여기서는 'data/processed' (이미지)가 있다고 가정합니다 (preprocess.py 실행 후)
     transform = transforms.Compose([
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # Load Dataset (Using the processed images)
-    dataset = datasets.ImageFolder(root=data_dir, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    # 장르 폴더 순회
+    genres = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
 
-    features_dict = {}
+    for genre in tqdm(genres, desc="Indexing Genres"):
+        genre_dir = os.path.join(data_dir, genre)
+        files = [f for f in os.listdir(genre_dir) if f.endswith('.png')]
 
-    with torch.no_grad():
-        for inputs, _ in tqdm(dataloader, desc="Indexing Database"):
-            inputs = inputs.to(DEVICE)
-            outputs = model(inputs)  # Output shape: (Batch, 512)
+        # 너무 많으면 장르당 20개만 샘플링 (속도 최적화 데모용)
+        # 실제 서비스에선 다 해야 함
+        files = files[:20]
 
-            # Move to CPU and numpy
-            current_features = outputs.cpu().numpy()
-
-            # Since we process in batches, we need to map features back to filenames
-            # Note: This is a simplified mapping. In a real app, we'd map indices strictly.
-            # Here, we just aggregate features for demo purposes.
-            pass
-
-            # [Optimization]
-    # Since mapping individual slices back to song names in batch mode is complex,
-    # and we want to average vectors per song (Song-Level Embedding),
-    # let's iterate by folders manually for clarity.
-
-    song_vectors = {}
-
-    genres = os.listdir(data_dir)
-    for genre in genres:
-        genre_path = os.path.join(data_dir, genre)
-        if not os.path.isdir(genre_path): continue
-
-        # Group slices by song name (e.g., blues.00000)
-        song_groups = {}
-        files = os.listdir(genre_path)
         for f in files:
-            if not f.endswith('.png'): continue
-            song_name = f.split('_slice')[0]  # blues.00000
-            if song_name not in song_groups:
-                song_groups[song_name] = []
-            song_groups[song_name].append(os.path.join(genre_path, f))
-
-        # Extract features for each song (Average of slices)
-        for song_name, img_paths in tqdm(song_groups.items(), desc=f"Indexing {genre}", leave=False):
-            song_feats = []
-
-            # Process slices in small batches or one by one
-            slice_tensors = []
-            for img_path in img_paths:
+            img_path = os.path.join(genre_dir, f)
+            try:
                 img = Image.open(img_path).convert('RGB')
-                slice_tensors.append(transform(img))
+                input_tensor = transform(img).unsqueeze(0).to(DEVICE)
 
-            if not slice_tensors: continue
+                with torch.no_grad():
+                    # Siamese Network의 forward_one 사용
+                    emb = model.forward_one(input_tensor)
+                    vectors[f"{genre}/{f}"] = emb.cpu().numpy().flatten()
+            except:
+                continue
 
-            batch_input = torch.stack(slice_tensors).to(DEVICE)
-            with torch.no_grad():
-                batch_out = model(batch_input)
-                # Average all slices to get ONE vector for the song
-                avg_feat = torch.mean(batch_out, dim=0).cpu().numpy()
-
-            song_vectors[f"{genre}/{song_name}"] = avg_feat
-
-    return song_vectors
+    return vectors
 
 
-def process_target_song(model, file_path):
+def find_similar_songs(target_audio_path, model, db_vectors, top_k=5):
     """
-    Converts a raw .mp3/.wav into a feature vector using the model.
+    입력된 오디오와 가장 유사한 곡 K개를 DB에서 찾습니다.
     """
-    # 1. Audio to Spectrogram Slices (Same logic as predict.py)
-    import matplotlib
-    matplotlib.use('Agg')
+    # 1. 타겟 오디오 임베딩 추출
+    target_tensor = audio_to_tensor(target_audio_path)
+    if target_tensor is None:
+        return []
 
-    y, sr = librosa.load(file_path, sr=22050)
-    samples_per_slice = 22050 * 3
-    num_slices = int(len(y) / samples_per_slice)
-
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-
-    slice_tensors = []
-
-    for i in range(num_slices):
-        start = i * samples_per_slice
-        end = start + samples_per_slice
-        slice_y = y[start:end]
-        if len(slice_y) != samples_per_slice: continue
-
-        mels = librosa.feature.melspectrogram(y=slice_y, sr=sr, n_mels=128)
-        log_mels = librosa.power_to_db(mels, ref=np.max)
-
-        fig = plt.figure(figsize=(2.56, 2.56), dpi=100)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        librosa.display.specshow(log_mels, sr=sr, hop_length=512)
-
-        fig.canvas.draw()
-        width, height = fig.canvas.get_width_height()
-        buf = fig.canvas.buffer_rgba()
-        img_arr = np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)
-        img_pil = Image.fromarray(img_arr).convert('RGB')
-        plt.close(fig)
-
-        slice_tensors.append(transform(img_pil))
-
-    if not slice_tensors: return None
-
-    # 2. Extract Feature
-    batch_input = torch.stack(slice_tensors).to(DEVICE)
     with torch.no_grad():
-        batch_out = model(batch_input)
-        avg_feat = torch.mean(batch_out, dim=0).cpu().numpy()
+        target_vec = model.forward_one(target_tensor).cpu().numpy().flatten()
 
-    return avg_feat
+    # 2. 코사인 유사도 계산
+    db_keys = list(db_vectors.keys())
+    db_vals = np.array(list(db_vectors.values()))
 
-
-def recommend_songs(target_vec, database_vectors, top_k=5):
-    """
-    Calculates Cosine Similarity and returns top K matches.
-    """
-    db_keys = list(database_vectors.keys())
-    db_vals = np.array(list(database_vectors.values()))
-
-    # Reshape target for sklearn (1, 512)
     target_vec = target_vec.reshape(1, -1)
 
-    # Calculate Similarity: Result (1, 1000)
+    # (1, 128) vs (N, 128)
     sim_scores = cosine_similarity(target_vec, db_vals)[0]
 
-    # Get Top K indices
+    # 3. Top K 추출
     top_indices = sim_scores.argsort()[-top_k:][::-1]
 
-    recommendations = []
+    results = []
     for idx in top_indices:
         score = sim_scores[idx]
-        song_name = db_keys[idx]
-        recommendations.append((song_name, score))
+        name = db_keys[idx]
+        # 파일명 정리 (blues/blues.00000_slice0.png -> blues.00000)
+        clean_name = name.split('/')[-1].split('_slice')[0]
+        results.append((clean_name, score))
 
-    return recommendations
-
-
-if __name__ == "__main__":
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
-
-    model_path = os.path.join(project_root, 'models', 'best_model.pth')
-    data_dir = os.path.join(project_root, 'data', 'processed')
-    my_song_dir = os.path.join(project_root, 'data', 'my_songs')
-
-    # 1. Setup Feature Extractor
-    print("🚀 Initializing Recommendation Engine...")
-    model = get_feature_extractor(model_path)
-
-    # 2. Index Database (GTZAN)
-    # In a real app, we would save this to a file (e.g., features.npy) to avoid re-running.
-    print("📂 Indexing GTZAN Database (This may take a moment)...")
-    db_vectors = extract_dataset_features(model, data_dir)
-    print(f"✅ Indexed {len(db_vectors)} songs from database.")
-
-    # 3. Process My Songs
-    my_songs = [f for f in os.listdir(my_song_dir) if f.lower().endswith(('.mp3', '.wav'))]
-
-    for song in my_songs:
-        song_path = os.path.join(my_song_dir, song)
-        print(f"\n🎵 Analyzing Target: {song}")
-
-        target_vec = process_target_song(model, song_path)
-        if target_vec is None: continue
-
-        # 4. Get Recommendations
-        recs = recommend_songs(target_vec, db_vectors)
-
-        print(f"   ❤️  Top 5 Similar Songs:")
-        for name, score in recs:
-            print(f"      - [{score * 100:.1f}%] {name}")
+    return results

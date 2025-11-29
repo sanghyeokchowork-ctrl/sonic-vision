@@ -13,6 +13,7 @@ import pandas as pd
 from model import get_model
 from mixing_assistant import MixingEngineer
 from vocal_timbre_model import VocalTimbreCNN
+from recommend import load_siamese_model, build_database_index, find_similar_songs
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -30,7 +31,7 @@ TIMBRE_TAGS = ['Bright', 'Warm', 'Breathy', 'Rough', 'Clean']
 
 @st.cache_resource
 def load_core_models():
-    """모든 AI 모델 로드"""
+    """모든 AI 모델 및 데이터베이스 로드"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
 
@@ -53,7 +54,20 @@ def load_core_models():
         print("⚠️ Vocal Timbre model not found.")
     timbre_model.eval()
 
-    return cls_model, mix_engineer, timbre_model, genre_path, project_root
+    # 4. Siamese Network & DB Index
+    siamese_path = os.path.join(project_root, 'models', 'siamese_net.pth')
+    siamese_model = load_siamese_model(siamese_path)
+
+    # DB Indexing (GTZAN Processed Data)
+    processed_dir = os.path.join(project_root, 'data', 'processed')
+    if os.path.exists(processed_dir):
+        db_vectors = build_database_index(siamese_model, processed_dir)
+    else:
+        db_vectors = {}
+        print("⚠️ 'data/processed' not found. Run preprocess.py first.")
+
+    # [수정됨] model_path 대신 genre_path를 리턴합니다.
+    return cls_model, mix_engineer, timbre_model, siamese_model, db_vectors, genre_path, project_root
 
 
 def analyze_timbre(model, audio_path):
@@ -94,7 +108,8 @@ st.sidebar.success(f"Device: {DEVICE.upper()}")
 
 # Load Models
 with st.spinner("🚀 Booting up AI Engines..."):
-    cls_model, mix_engineer, timbre_model, model_path, project_root = load_core_models()
+    # [수정됨] 받는 쪽 변수명도 model_path로 유지 (내부적으로 genre_path 값을 받음)
+    cls_model, mix_engineer, timbre_model, siamese_model, db_vectors, model_path, project_root = load_core_models()
 
 uploaded_file = st.file_uploader("Upload Track (MP3/WAV)", type=["mp3", "wav"])
 
@@ -109,12 +124,13 @@ if uploaded_file is not None:
     if 'top_genre' not in st.session_state:
         st.session_state['top_genre'] = 'pop'  # default
 
-    # 탭 구성
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # 탭 구성 (5개)
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Analysis",
         "🎛️ Remix (Stems)",
         "🎚️ Mixing Studio",
-        "🎤 Vocal Lab"
+        "🎤 Vocal Lab",
+        "🔭 Discovery"
     ])
 
     # === TAB 1: Analysis ===
@@ -221,7 +237,7 @@ if uploaded_file is not None:
                         st.subheader("Frequency Balance")
                         st.bar_chart(mix_result['balance_data'])
 
-    # === TAB 4: Vocal Lab (FINAL) ===
+    # === TAB 4: Vocal Lab ===
     with tab4:
         st.header("🎤 Vocal Lab")
 
@@ -259,7 +275,40 @@ if uploaded_file is not None:
                     else:
                         st.write("### Analysis Result")
                         for tag, prob in result.items():
-                            # 확률값(0.0 ~ 1.0)을 퍼센트로 표시
                             val = int(prob * 100)
-                            color = "green" if val > 50 else "blue"
                             st.progress(val, text=f"**{tag}**: {val}%")
+
+    # === TAB 5: Discovery ===
+    with tab5:
+        st.header("🔭 Similar Song Discovery")
+        st.info("Finds songs with acoustically similar vibe using Siamese Network embeddings.")
+
+        if not db_vectors:
+            st.error("❌ Database is empty. Please run `src/preprocess.py` to index GTZAN data.")
+
+        else:
+            if st.button("🔎 Find Similar Tracks"):
+                with st.spinner("Calculating Embeddings & Matching..."):
+                    results = find_similar_songs(temp_path, siamese_model, db_vectors, top_k=5)
+
+                    if results:
+                        st.subheader("Top 5 Matches")
+                        for idx, (name, score) in enumerate(results):
+                            sim_percent = int(score * 100)
+
+                            with st.container():
+                                c1, c2 = st.columns([1, 4])
+                                with c1:
+                                    st.metric(label="Similarity", value=f"{sim_percent}%")
+                                with c2:
+                                    st.markdown(f"**{idx + 1}. {name}**")
+                                    if "jazz" in name:
+                                        st.caption("🎷 Jazz Vibe detected")
+                                    elif "hiphop" in name:
+                                        st.caption("🎤 Hiphop Vibe detected")
+                                    elif "rock" in name:
+                                        st.caption("🎸 Rock Vibe detected")
+
+                                st.divider()
+                    else:
+                        st.warning("No matches found.")

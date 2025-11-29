@@ -4,11 +4,11 @@
 > An end-to-end AI workstation exploring Audio Analysis, Intelligent Mixing, and Vocal Forensics using PyTorch & Librosa.
 
 <div align="center">
-  <img src="https://img.shields.io/badge/Python-3.9-blue?logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/PyTorch-Deep%20Learning-ee4c2c?logo=pytorch" alt="PyTorch">
-  <img src="https://img.shields.io/badge/Streamlit-Web%20App-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Demucs-Source%20Separation-blueviolet" alt="Demucs">
-  <img src="https://img.shields.io/badge/Librosa-DSP-green" alt="Librosa">
+  <img src="[https://img.shields.io/badge/Python-3.9-blue?logo=python](https://img.shields.io/badge/Python-3.9-blue?logo=python)" alt="Python">
+  <img src="[https://img.shields.io/badge/PyTorch-Deep%20Learning-ee4c2c?logo=pytorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-ee4c2c?logo=pytorch)" alt="PyTorch">
+  <img src="[https://img.shields.io/badge/Streamlit-Web%20App-FF4B4B?logo=streamlit](https://img.shields.io/badge/Streamlit-Web%20App-FF4B4B?logo=streamlit)" alt="Streamlit">
+  <img src="[https://img.shields.io/badge/Demucs-Source%20Separation-blueviolet](https://img.shields.io/badge/Demucs-Source%20Separation-blueviolet)" alt="Demucs">
+  <img src="[https://img.shields.io/badge/Librosa-DSP-green](https://img.shields.io/badge/Librosa-DSP-green)" alt="Librosa">
 </div>
 
 ## 1. Project Overview
@@ -83,7 +83,7 @@ I analyzed my own tracks to test the model's adaptability.
 ### Setup
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/sanghyeokchowork-ctrl/sonic-vision.git](https://github.com/sanghyeokchowork-ctrl/sonic-vision.git)
+git clone https://github.com/sanghyeokchowork-ctrl/sonic-vision.git
 cd sonic-vision
 
 # 2. Install dependencies
