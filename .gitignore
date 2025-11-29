@@ -1,31 +1,26 @@
-# ==========================
-# Python & PyCharm Ignored
-# ==========================
+# Python caches
 __pycache__/
 *.py[cod]
-.idea/
+.ipynb_checkpoints/
+
+# Mac System
 .DS_Store
 
-# ==========================
-# Data (NEVER UPLOAD THESE)
-# ==========================
-# Ignore the raw audio files
-data/raw/
-# Ignore the generated spectrogram images
-data/processed/
-# Ignore model checkpoints (large files)
-models/*.pth
+# Large Data & Audio Files
+data/
+temp_stems/
+results/
+*.wav
+*.mp3
+*.png
+*.jpg
 
-# ==========================
-# Virtual Environment
-# ==========================
+# Models (GitHub has 100MB limit)
+models/
+*.pth
+
+# Environment
+.env
 venv/
 env/
-.env
-# Ignore my large audio files
-data/my_songs/
-# Ignore Streamlit temp files
-temp_*
-# Ignore generated audio stems
-results/stems/
-*.wav
+.anaconda/

@@ -7,6 +7,12 @@ from PIL import Image
 import subprocess
 import sys
 import librosa
+import pandas as pd
+
+# 사용자 모듈 임포트
+from model import get_model
+from mixing_assistant import MixingEngineer
+from vocal_timbre_model import VocalTimbreCNN
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -16,279 +22,244 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 st.set_page_config(page_title="Sonic Vision Pro", page_icon="🎵", layout="wide")
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
-
-@st.cache_resource
-def load_system_resources():
-    # Lazy imports to prevent startup locks
-    from model import get_model
-    from recommend import get_feature_extractor, extract_dataset_features
-
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
-    model_path = os.path.join(project_root, 'models', 'best_model.pth')
-    data_dir = os.path.join(project_root, 'data', 'processed')
-
-    cls_model = get_model(num_classes=10, device=DEVICE)
-    cls_model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-    cls_model.eval()
-
-    fe_model = get_feature_extractor(model_path)
-    db_vectors = extract_dataset_features(fe_model, data_dir)
-
-    return cls_model, fe_model, db_vectors, model_path
-
-
 CLASSES = ['blues', 'classical', 'country', 'disco', 'hiphop',
            'jazz', 'metal', 'pop', 'reggae', 'rock']
 
-
-# ==========================================
-# Feature Analysis Logic (Tuned for R&B)
-# ==========================================
-def analyze_track_features(audio_path, genre_probs):
-    """
-    Analyzes audio features (Energy, Danceability, etc.)
-    Combines physical audio features (Librosa) + Genre-based heuristics.
-    """
-    # 1. Physical Analysis (Librosa)
-    y, sr = librosa.load(audio_path, duration=30)
-    rms = float(np.mean(librosa.feature.rms(y=y)))  # Loudness/Energy
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)  # Tempo
-
-    # Normalize physical values (Approximation)
-    norm_energy = min(rms * 4, 1.0)
-    norm_tempo = min((tempo - 60) / 100, 1.0) if tempo > 60 else 0.0
-
-    # 2. Genre-based Weights (Heuristics)
-    weights = {
-        # Genre:     [Dance, Happy, Acoustic, Instrum]
-        'blues': [0.4, 0.3, 0.7, 0.5],
-        'classical': [0.1, 0.2, 0.9, 0.9],
-        'country': [0.5, 0.6, 0.8, 0.4],
-        'disco': [0.9, 0.9, 0.1, 0.2],
-        'hiphop': [0.8, 0.5, 0.3, 0.1],
-        'jazz': [0.5, 0.4, 0.85, 0.7],
-        'metal': [0.2, 0.1, 0.0, 0.1],
-        'pop': [0.7, 0.7, 0.45, 0.0],
-        'reggae': [0.7, 0.7, 0.4, 0.1],
-        'rock': [0.4, 0.3, 0.2, 0.3]
-    }
-
-    dance_score = 0.0
-    happy_score = 0.0
-    acoustic_score = 0.0
-    instrum_score = 0.0
-
-    # Weighted sum based on predicted genre probabilities
-    for i, prob in enumerate(genre_probs):
-        genre = CLASSES[i]
-        if genre in weights:
-            w = weights[genre]
-            dance_score += prob * w[0]
-            happy_score += prob * w[1]
-            acoustic_score += prob * w[2]
-            instrum_score += prob * w[3]
-
-    # 3. Combine Physical + Genre
-    final_features = {
-        "Energy": int(((norm_energy * 0.4) + ((1 - acoustic_score) * 0.6)) * 100),
-        "Danceability": int((norm_tempo * 0.3 + dance_score * 0.7) * 100),
-        "Happiness": int(happy_score * 100),
-        "Acousticness": int(acoustic_score * 100),
-        "Instrumental": int(instrum_score * 100),
-        "Loudness (dB)": int(librosa.amplitude_to_db(np.array([rms]))[0])
-    }
-    return final_features
+TIMBRE_TAGS = ['Bright', 'Warm', 'Breathy', 'Rough', 'Clean']
 
 
-def plot_circular_bar(ax, value, label, color='#4CAF50'):
-    """
-    Draws a single circular progress bar (Donut Chart)
-    """
-    # Data
-    if label == "Loudness (dB)":
-        display_val = f"{value}dB"
-        percentage = min(max((value + 60) / 60, 0), 1)  # Normalize -60dB ~ 0dB
+@st.cache_resource
+def load_core_models():
+    """모든 AI 모델 로드"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+
+    # 1. Genre Model
+    genre_path = os.path.join(project_root, 'models', 'best_model.pth')
+    cls_model = get_model(num_classes=10, device=DEVICE)
+    if os.path.exists(genre_path):
+        cls_model.load_state_dict(torch.load(genre_path, map_location=DEVICE))
+    cls_model.eval()
+
+    # 2. Mixing Engineer (Rule-based)
+    mix_engineer = MixingEngineer(sample_rate=22050)
+
+    # 3. Vocal Timbre Model
+    timbre_path = os.path.join(project_root, 'models', 'vocal_timbre.pth')
+    timbre_model = VocalTimbreCNN(num_tags=len(TIMBRE_TAGS)).to(DEVICE)
+    if os.path.exists(timbre_path):
+        timbre_model.load_state_dict(torch.load(timbre_path, map_location=DEVICE))
     else:
-        display_val = f"{value}"
-        percentage = value / 100.0
+        print("⚠️ Vocal Timbre model not found.")
+    timbre_model.eval()
 
-    # Donut Chart
-    sizes = [percentage, 1 - percentage]
-    colors = [color, '#f0f2f6']  # Value color, Empty color
+    return cls_model, mix_engineer, timbre_model, genre_path, project_root
 
-    ax.pie(sizes, radius=1, startangle=90, colors=colors,
-           wedgeprops=dict(width=0.1, edgecolor='none'), counterclock=False)
 
-    # Center Text
-    ax.text(0, 0, display_val, ha='center', va='center', fontsize=20, fontweight='bold', color='#333333')
+def analyze_timbre(model, audio_path):
+    """보컬 파일의 음색을 추론"""
+    try:
+        # 학습 때와 동일한 전처리 (3초, 22050Hz, MFCC 40)
+        y, sr = librosa.load(audio_path, sr=22050, duration=3.0)
+        target_len = 22050 * 3
 
-    # Label Text (Bottom)
-    ax.text(0, -1.5, label, ha='center', va='center', fontsize=12, color='#666666')
+        if len(y) < target_len:
+            y = np.pad(y, (0, target_len - len(y)))
+        else:
+            y = y[:target_len]
 
-    ax.axis('equal')
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
+        input_tensor = torch.tensor(mfcc, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(DEVICE)
+
+        with torch.no_grad():
+            outputs = model(input_tensor)
+            # Logits -> Sigmoid (확률값 0~1 변환)
+            probs = torch.sigmoid(outputs).squeeze().cpu().numpy()
+
+        return dict(zip(TIMBRE_TAGS, probs))
+    except Exception as e:
+        return {"Error": str(e)}
 
 
 # ==========================================
-# UI Layout
+# Main UI
 # ==========================================
 st.title("🎵 Sonic Vision Pro: AI Music Workstation")
 st.markdown("""
-**The All-in-One AI Tool for Musicians.** Analyze Genre, Visualize Attention, and Deconstruct Stems.
+**All-in-One AI Tool for Musicians.** Genre Analysis, Stem Separation, Mixing Advice, and Vocal Analysis.
 """)
 
-st.sidebar.header("System Info")
-st.sidebar.success(f"System Ready (Device: {DEVICE.upper()})")
-st.sidebar.info("""
-**Features:**
-- **Vision:** ResNet18 + Grad-CAM
-- **Features:** Spotify-style Analysis
-- **Remix:** Demucs (SOTA Separation)
-- **Lyrics:** Whisper (Multimodal)
-""")
+st.sidebar.header("System Status")
+st.sidebar.success(f"Device: {DEVICE.upper()}")
 
-# Load Core AI
-with st.spinner("🚀 Booting up Core AI..."):
-    cls_model, fe_model, db_vectors, model_path = load_system_resources()
+# Load Models
+with st.spinner("🚀 Booting up AI Engines..."):
+    cls_model, mix_engineer, timbre_model, model_path, project_root = load_core_models()
 
 uploaded_file = st.file_uploader("Upload Track (MP3/WAV)", type=["mp3", "wav"])
 
 if uploaded_file is not None:
-    temp_path = os.path.join("temp_audio.wav")
+    temp_path = "temp_audio.wav"
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # Tabs
-    tab_analyze, tab_remix, tab_lyrics = st.tabs(["📊 Track Features", "🎛️ Remix (Demucs)", "📝 Lyrics (Whisper)"])
+    # Session State 초기화
+    if 'genre_probs' not in st.session_state:
+        st.session_state['genre_probs'] = None
+    if 'top_genre' not in st.session_state:
+        st.session_state['top_genre'] = 'pop'  # default
 
-    # === TAB 1: Track Features (Spotify Style) ===
-    with tab_analyze:
+    # 탭 구성
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Analysis",
+        "🎛️ Remix (Stems)",
+        "🎚️ Mixing Studio",
+        "🎤 Vocal Lab"
+    ])
+
+    # === TAB 1: Analysis ===
+    with tab1:
+        st.header("📊 Track Analysis")
         from predict import process_audio
-        from recommend import process_target_song, recommend_songs
         from explain import save_gradcam
 
-        # 1. Genre Prediction First
-        inputs = process_audio(temp_path)
-        if inputs is not None:
-            with torch.no_grad():
-                outputs = cls_model(inputs)
-                probs = torch.nn.functional.softmax(outputs, dim=1)
-                avg_probs = torch.mean(probs, dim=0).cpu().numpy()
+        if st.button("🔍 Analyze Genre & Features"):
+            inputs = process_audio(temp_path)
+            if inputs is not None:
+                with torch.no_grad():
+                    outputs = cls_model(inputs)
+                    probs = torch.nn.functional.softmax(outputs, dim=1)
+                    avg_probs = torch.mean(probs, dim=0).cpu().numpy()
 
-            # 2. Calculate Features
-            features = analyze_track_features(temp_path, avg_probs)
-
-            st.subheader("Audio Features Analysis")
-
-            # 3. Draw Circular Bars (Grid Layout)
-            fig, axs = plt.subplots(1, 6, figsize=(12, 3))
-            cols = st.columns(6)
-
-            # Define colors for each metric
-            palette = ['#4CAF50', '#2196F3', '#FFC107', '#9C27B0', '#FF5722', '#607D8B']
-            metrics = list(features.items())
-
-            for i, (label, val) in enumerate(metrics):
-                plot_circular_bar(axs[i], val, label, color=palette[i])
-
-            st.pyplot(fig)  # Show the matplotlib figure
-
-            st.divider()
-
-            # Genre & Similar Songs
-            c1, c2 = st.columns([1, 1])
-
-            with c1:
-                st.subheader("Genre Classification")
+                st.session_state['genre_probs'] = avg_probs
                 top3 = avg_probs.argsort()[-3:][::-1]
-                top_genre = CLASSES[top3[0]].upper()
-                st.metric("Primary Genre", top_genre, f"{avg_probs[top3[0]] * 100:.1f}% Confidence")
-                st.bar_chart({CLASSES[i].upper(): avg_probs[i] for i in top3})
+                st.session_state['top_genre'] = CLASSES[top3[0]]
 
-                # Dynamic Genre Insight (Covers ALL Genres)
-                genre_insights = {
-                    'BLUES': "Identified soulful vocals and guitar licks characteristic of **BLUES**.",
-                    'CLASSICAL': "Detected orchestral textures and lack of strong beat patterns (**CLASSICAL**).",
-                    'COUNTRY': "AI mapped the **Vocal/Acoustic** texture to 'COUNTRY'.",
-                    'DISCO': "Strong dance beat and synth elements identified (**DISCO**).",
-                    'HIPHOP': "AI identified strong **Sub-bass & Rhythmic** patterns (**HIPHOP**).",
-                    'JAZZ': "Identified as **JAZZ** likely due to harmonic complexity and acoustic elements.",
-                    'METAL': "Detected high energy, distorted guitars, and aggressive drumming (**METAL**).",
-                    'POP': "Identified as **POP** with modern production features and vocal focus.",
-                    'REGGAE': "Distinctive off-beat rhythm and bass patterns detected (**REGGAE**).",
-                    'ROCK': "Electric guitar riffs and strong backbeat identified (**ROCK**)."
-                }
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    st.subheader("Genre Prediction")
+                    st.metric("Primary Genre", st.session_state['top_genre'].upper(),
+                              f"{avg_probs[top3[0]] * 100:.1f}%")
+                    st.bar_chart({CLASSES[i]: avg_probs[i] for i in top3})
 
-                # Default message if genre not in dict
-                insight_msg = genre_insights.get(top_genre,
-                                                 f"AI classified this track as **{top_genre}** based on spectral features.")
-                st.info(f"💡 **Insight:** {insight_msg}")
-
-            with c2:
-                st.subheader("AI Vision (Attention)")
-                if st.button("🔍 View Heatmap"):
+                with c2:
+                    st.subheader("AI Vision (Grad-CAM)")
                     heatmap_path = "temp_heatmap.jpg"
                     try:
                         save_gradcam(temp_path, model_path, heatmap_path)
-                        st.image(heatmap_path, caption="What did AI listen to?", use_container_width=True)
+                        st.image(heatmap_path, caption="AI Attention Map", use_container_width=True)
                     except:
-                        st.error("Heatmap failed.")
+                        st.warning("Heatmap generation failed (Model might be untrained).")
 
-    # === TAB 2: Remix Station ===
-    with tab_remix:
-        st.header("🎛️ Stem Separation")
-        st.info("ℹ️ Using **Meta's Demucs**. Processing takes 3~5 mins on CPU.")
-
-        if st.button("🔥 Start HQ Separation"):
-            with st.spinner("Separating... (Please wait)"):
+    # === TAB 2: Remix ===
+    with tab2:
+        st.header("🎛️ Stem Separation (Demucs)")
+        if st.button("🔥 Separate Stems"):
+            with st.spinner("Separating... (This takes time)"):
                 from separate import separate_audio
 
-                try:
-                    stems = separate_audio(temp_path, output_dir="temp_stems")
-                    if stems:
-                        st.success("Done!")
-                        st.session_state['stems'] = stems
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                stems = separate_audio(temp_path, output_dir="temp_stems")
+                if stems:
+                    st.session_state['stems'] = stems
+                    st.success("Separation Complete!")
 
         if 'stems' in st.session_state:
             stems = st.session_state['stems']
-            st.markdown("---")
-            st.subheader("🎧 Separated Stems")
-
-            c1, c2 = st.columns(2)
-            c3, c4 = st.columns(2)
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
-                st.markdown("##### 🎤 Vocals")
+                st.markdown("**🎤 Vocals**")
                 if stems.get('vocals'): st.audio(stems.get('vocals'))
             with c2:
-                st.markdown("##### 🥁 Drums")
+                st.markdown("**🥁 Drums**")
                 if stems.get('drums'): st.audio(stems.get('drums'))
             with c3:
-                st.markdown("##### 🎸 Bass")
+                st.markdown("**🎸 Bass**")
                 if stems.get('bass'): st.audio(stems.get('bass'))
             with c4:
-                st.markdown("##### 🎹 Other")
+                st.markdown("**🎹 Other**")
                 if stems.get('other'): st.audio(stems.get('other'))
 
-    # === TAB 3: Lyrics ===
-    with tab_lyrics:
-        st.header("📝 Lyrics Transcription")
+    # === TAB 3: Mixing Studio ===
+    with tab3:
+        st.header("🎚️ AI Mixing Assistant")
+        st.info("Analyzes frequency balance and suggests EQ settings based on the target genre.")
 
+        target_genre = st.selectbox(
+            "Target Genre Style",
+            CLASSES,
+            index=CLASSES.index(st.session_state['top_genre']) if st.session_state['top_genre'] in CLASSES else 7
+        )
+
+        if st.button("🎚️ Analyze Mix Balance"):
+            with st.spinner("Analyzing Frequency Spectrum..."):
+                mix_result = mix_engineer.get_mixing_suggestions(temp_path, detected_genre=target_genre)
+
+                if "error" in mix_result:
+                    st.error(f"Analysis Failed: {mix_result['error']}")
+                else:
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        st.subheader("💡 Suggestions")
+                        if mix_result['alert_level'] == "Red":
+                            st.error("Major adjustments needed!")
+                        elif mix_result['alert_level'] == "Yellow":
+                            st.warning("Adjustments recommended.")
+                        else:
+                            st.success("Mix is well balanced!")
+
+                        for tip in mix_result['suggestions']:
+                            if "Boost" in tip:
+                                st.markdown(f"- 🔼 {tip}")
+                            elif "Cut" in tip:
+                                st.markdown(f"- 🔽 {tip}")
+                            else:
+                                st.markdown(f"- ✅ {tip}")
+                        st.markdown("---")
+                        st.caption(mix_result['dynamic_advice'])
+
+                    with col2:
+                        st.subheader("Frequency Balance")
+                        st.bar_chart(mix_result['balance_data'])
+
+    # === TAB 4: Vocal Lab (FINAL) ===
+    with tab4:
+        st.header("🎤 Vocal Lab")
+
+        # 보컬 파일 확인
+        vocal_path = None
         if 'stems' in st.session_state and st.session_state['stems'].get('vocals'):
-            target = st.session_state['stems'].get('vocals')
+            vocal_path = st.session_state['stems'].get('vocals')
             st.success("✅ Using separated **Vocals** stem.")
         else:
-            target = temp_path
-            st.warning("⚠️ Using original full track.")
+            st.warning("⚠️ No separated vocals found. Using original track (Accuracy may be lower).")
+            vocal_path = temp_path
 
-        if st.button("📝 Transcribe (Whisper)"):
-            with st.spinner("Listening..."):
-                from transcribe import transcribe_audio
+        col_lyric, col_timbre = st.columns(2)
 
-                text, lang = transcribe_audio(target)
-                if text:
-                    st.success(f"Language: {lang}")
-                    st.text_area("Lyrics", text, height=300)
-                else:
-                    st.error("Transcription failed.")
+        with col_lyric:
+            st.subheader("📝 Lyrics (Whisper)")
+            if st.button("Transcribe Lyrics"):
+                with st.spinner("Transcribing..."):
+                    from transcribe import transcribe_audio
+
+                    text, lang = transcribe_audio(vocal_path)
+                    if text:
+                        st.text_area("Result", text, height=200)
+
+        with col_timbre:
+            st.subheader("🎨 Timbre Analysis")
+            st.caption(f"Tags: {', '.join(TIMBRE_TAGS)}")
+
+            if st.button("Analyze Timbre"):
+                with st.spinner("Listening to Timbre..."):
+                    result = analyze_timbre(timbre_model, vocal_path)
+
+                    if "Error" in result:
+                        st.error(f"Error: {result['Error']}")
+                    else:
+                        st.write("### Analysis Result")
+                        for tag, prob in result.items():
+                            # 확률값(0.0 ~ 1.0)을 퍼센트로 표시
+                            val = int(prob * 100)
+                            color = "green" if val > 50 else "blue"
+                            st.progress(val, text=f"**{tag}**: {val}%")
