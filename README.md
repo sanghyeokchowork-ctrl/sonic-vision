@@ -1,35 +1,54 @@
-# 🎵 Sonic Vision: AI Music Analyzer & Deconstructor
+# 🎵 Sonic Vision Pro: AI Music Workstation
 
-> **"How does AI listen to music compared to an artist?"**
-> An end-to-end AI project exploring Audio Analysis, Explainable AI (XAI), and Source Separation using PyTorch.
+> **"From Analysis to Creation: An AI Engineer for Musicians"**
+> An end-to-end AI workstation exploring Audio Analysis, Intelligent Mixing, and Vocal Forensics using PyTorch & Librosa.
 
 <div align="center">
   <img src="https://img.shields.io/badge/Python-3.9-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/PyTorch-Deep%20Learning-ee4c2c?logo=pytorch" alt="PyTorch">
   <img src="https://img.shields.io/badge/Streamlit-Web%20App-FF4B4B?logo=streamlit" alt="Streamlit">
   <img src="https://img.shields.io/badge/Demucs-Source%20Separation-blueviolet" alt="Demucs">
+  <img src="https://img.shields.io/badge/Librosa-DSP-green" alt="Librosa">
 </div>
 
 ## 1. Project Overview
-* **Motivation:** As an R&B artist ('PARFUMDEWALKER'), I noticed that standard open-source datasets (like GTZAN) lack modern 'R&B' or 'Melodic Rap' categories. I wanted to investigate **how AI interprets these "unseen" genres** based on limited training data.
-* **Goal:** To build a full-stack AI application that classifies genres, visualizes decision-making processes (Heatmaps), recommends similar tracks, and **deconstructs audio into stems (Vocals/Drums/Bass)**.
+* **Identity:** Developed by **PARFUMDEWALKER** (R&B Artist & Dev).
+* **Evolution:** Started as a simple genre classifier, this project evolved into **Sonic Vision Pro**—a comprehensive tool that not only "listens" but also "assists" in the creative process.
+* **Goal:** To bridge the gap between **Music Production** and **AI Engineering** by building tools that solve real-world musician problems:
+    * *"Is my mix balanced for Hip-hop?"*
+    * *"What is the texture of my vocal?"*
+    * *"Which songs are acoustically similar to mine?"*
 
-## 2. Key Features
-1.  **Genre Classification:** Fine-tuned **ResNet18** (CNN) on Mel-Spectrograms (Accuracy: **92.09%**).
-2.  **Explainable AI (XAI):** Visualized model attention using **Grad-CAM** to reveal *why* a specific genre was predicted (e.g., focusing on Bass vs. Vocals).
-3.  **Recommendation Engine:** Implemented a **Vector Search** system using Cosine Similarity on latent feature vectors (512-dim) extracted from the penultimate layer.
-4.  **Remix Station (Source Separation):** Integrated **Meta's Demucs (htdemucs)** model to separate tracks into 4 stems (Vocals, Drums, Bass, Other) with SOTA quality.
+## 2. Key Features & Architecture
+
+### 🧠 1. Deep Audio Analysis (Vision & Metric Learning)
+* **Genre Classification:** Fine-tuned **ResNet18** on Mel-Spectrograms (Accuracy: **92.09%**).
+* **Explainable AI (XAI):** Visualized model attention using **Grad-CAM** to reveal *why* a specific genre was predicted (e.g., focusing on Bass vs. Vocals).
+* **Acoustic Similarity (Siamese Network):** Implemented a **Siamese Network with Triplet Loss** to learn a metric space where acoustically similar songs are clustered together, surpassing simple class-based matching.
+
+### 🎚️ 2. AI Mixing Assistant
+* **Algorithm:** A hybrid Signal Processing engine (FFT-based) that analyzes the frequency balance of a track.
+* **Genre-Adaptive:** Automatically compares the track's spectrum against "Ideal Genre Targets" (e.g., Hip-hop requires boosted Sub-bass, Pop requires present Mids).
+* **Actionable Feedback:** Provides specific engineering advice (e.g., *"Cut Low-Mids -2dB"*, *"Boost Brilliance +1.5dB"*).
+
+### 🎤 3. Vocal Lab (Timbre Forensics)
+* **Pipeline:** Automates the extraction of **Vocals Only** using Demucs.
+* **Model:** A custom **Multi-label CNN** trained on MFCC features to classify abstract vocal textures.
+* **Tags:** Detects nuances like `Warm`, `Bright`, `Breathy`, `Rough`, and `Clean`.
+
+### 🎛️ 4. Remix Station
+* **Source Separation:** Integrated **Meta's Demucs (htdemucs)** model to separate tracks into 4 stems (Vocals, Drums, Bass, Other) with SOTA quality.
 
 ## 3. Tech Stack
 | Category | Technology | Description |
 |---|---|---|
 | **Core** | Python 3.9 | Main programming language |
-| **Model** | **PyTorch**, Torchvision | CNN Architecture & Transfer Learning |
-| **Audio** | **Librosa**, Torchaudio | DSP (Spectrogram conversion) & I/O |
-| **Separation** | **Demucs (v4)** | **SOTA Music Source Separation** (Hybrid Transformer) |
-| **XAI** | **Grad-CAM** | Visualizing model focus areas (Heatmaps) |
-| **Deployment** | **Streamlit** | Interactive Web UI implementation |
-| **Env** | macOS (MPS/CPU) | Hardware acceleration & Memory optimization |
+| **Model** | **PyTorch** | CNN (ResNet), Siamese Network, Custom Timbre CNN |
+| **Audio DSP** | **Librosa**, Torchaudio | STFT, MFCC, Spectrogram conversion, Frequency Analysis |
+| **Separation** | **Demucs (v4)** | SOTA Music Source Separation (Hybrid Transformer) |
+| **Deployment** | **Streamlit** | Interactive Dashboard (4-Tab Layout) |
+| **Data** | Pandas | Handling dataset annotations and labeling |
+| **Hardware** | macOS (MPS) | Optimized for Apple Silicon GPU acceleration |
 
 ## 4. Analysis Case Study
 I analyzed my own tracks to test the model's adaptability.
@@ -39,31 +58,27 @@ I analyzed my own tracks to test the model's adaptability.
   <img src="results/heatmap_9624 JAZZ CLUB AR.wav.jpg" width="400" alt="Heatmap Jazz Club">
 </p>
 
-* **Context:** The title is inspired by *Maison Margiela's 'Replica Jazz Club'* fragrance. The track is actually **Melodic Rap**.
-* **AI Focus:** The heatmap highlights the **bottom area (Low Frequencies/Bass)**.
-* **Insight:** The AI was not misled by the text title "Jazz". Instead, it correctly identified the **modern mixing balance (strong low-end & kick)** characteristic of Pop/Hip-Hop, proving it analyzes actual audio textures rather than metadata.
+* **Insight:** The AI focused on the **low-end & kick**, correctly identifying the modern mixing balance typical of Pop/Hip-Hop, ignoring the misleading title "Jazz".
 
 ### Case 2: Lawson. (Trapsoul) → Predicted: HIPHOP
 <p align="center">
   <img src="results/heatmap_9624 Lawson. AR.wav.jpg" width="400" alt="Heatmap Lawson">
 </p>
 
-* **AI Focus:** The red zones are concentrated in **dense blocks at the bottom (Sub-bass)**.
-* **Insight:** The model successfully identified the **808 sub-bass and rhythmic kick patterns**, which are signature elements of Hip-Hop.
+* **Insight:** The red zones are dense in the **Sub-bass** region, proving the model detects 808 patterns effectively.
 
 ### Case 3: Serenade, Pt. II (R&B) → Predicted: COUNTRY
 <p align="center">
   <img src="results/heatmap_9624 SERENADE PT. II AR.wav.jpg" width="400" alt="Heatmap Serenade">
 </p>
 
-* **AI Focus:** The heatmap is spread across the **Mid-to-High frequencies (Vocals & Acoustics)**.
-* **Insight:** Instead of the beat, the model focused on the **vocal melody and acoustic textures**. Since 'R&B' was not a label option, the AI mapped the **vocal-centric nature** of the track to 'COUNTRY', which shares similar acoustic characteristics in the training set.
+* **Insight:** The model focused on **Vocals & Acoustics**. Since 'R&B' was not in the training set, it mapped the "Acoustic/Vocal-centric" texture to the closest learned representation: Country.
 
 ## 5. Installation & Usage
 
 ### Prerequisites
 - Python 3.9+
-- FFmpeg (for audio processing)
+- FFmpeg
 
 ### Setup
 ```bash
@@ -73,25 +88,44 @@ cd sonic-vision
 
 # 2. Install dependencies
 pip install -r requirements.txt
-
-Run Web App
+Running the App
 Bash
 
-# Start the Streamlit application
 streamlit run src/app.py
-The app allows you to upload MP3/WAV files, view analysis results, and perform source separation.
+Tab 1 (Analysis): Check Genre & Heatmaps.
 
+Tab 2 (Remix): Separate stems using Demucs.
+
+Tab 3 (Mixing): Get AI EQ suggestions.
+
+Tab 4 (Vocal Lab): Transcribe lyrics & Analyze vocal timbre.
+
+Training Modules (Optional)
+If you want to train your own Vocal Timbre model:
+
+Bash
+
+# 1. Auto-extract vocals from your songs
+python src/prepare_vocals.py
+
+# 2. Generate CSV & Train
+python src/vocal_timbre_train.py
 6. Engineering Challenges & Solutions
-OOM (Out of Memory) on Mac:
+1. Data Scarcity for "Vocal Timbre"
+Issue: There are no public datasets labeled with abstract tags like "Breathy" or "Warm".
 
-Issue: High-quality source separation (Demucs) caused memory overflow on macOS GPU (MPS).
+Solution: Built an Auto-Labelling Pipeline.
 
-Solution: Implemented a hybrid inference pipeline where lightweight classification runs on MPS (GPU) for speed, while heavy separation tasks are offloaded to CPU to ensure stability and prevent crashing.
+Script iterates through my discography -> Uses Demucs to extract vocals -> Saves to a training folder.
 
-Dataset Bias:
+Created a custom PyTorch Dataset class that handles CSV encoding issues (CP949/UTF-8) robustly.
 
-Issue: GTZAN dataset is outdated (1950s-90s style).
+2. Subjective Similarity
+Issue: Determining if two songs are "similar" is subjective and hard to define with classification accuracy.
 
-Solution: Used Feature Vector Similarity search to bridge the gap between vintage training data and modern production styles.
+Solution: Switched from Classification to Metric Learning. Implemented a Siamese Network with Triplet Loss, teaching the AI to understand "distance" between tracks rather than just labels.
 
-Developed by PARFUMDEWALKER
+3. OOM (Out of Memory) on Mac
+Issue: Running Demucs + ResNet + Grad-CAM simultaneously crashed the GPU (MPS).
+
+Solution: Implemented Lazy Loading (@st.cache_resource) and strategic CPU offloading for heavy separation tasks, ensuring a smooth UX on local machines.
