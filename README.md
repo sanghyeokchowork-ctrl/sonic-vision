@@ -70,3 +70,29 @@ cd sonic-vision
 
 # 2. Install dependencies
 pip install -r requirements.txt
+
+## 6. Challenges & Technical Solutions
+
+### 📉 1. Visualization Mismatch in Grad-CAM
+* **Problem:** When visualizing the AI's attention using `Grad-CAM`, the heatmaps failed to align correctly with the audio waveform because the time-axis dimensions of the raw audio and the Mel-spectrogram did not match.
+* **Solution:** 
+  * Instead of relying on automatic axis alignment, I implemented **manual time-axis generation** using `np.linspace`.
+  * Applied **Linear Interpolation** to resize the Grad-CAM heatmap to strictly match the spectrogram's dimensions, ensuring pixel-perfect alignment between visual features and audio events.
+
+### 💾 2. Memory Optimization on Apple Silicon (OOM)
+* **Problem:** Running the **Demucs** source separation model locally on a Mac M1 caused **Out of Memory (OOM)** errors and process crashes due to heavy tensor operations.
+* **Solution:** 
+  * **Chunking Strategy:** Implemented a logic to slice audio into 10-second segments for processing and stitch them back together post-inference.
+  * **Gradient Management:** Enforced `torch.no_grad()` during the inference phase to disable gradient calculation, significantly reducing VRAM usage without compromising output quality.
+
+### 🥁 3. Distinguishing Rhythm-Heavy Genres
+* **Problem:** The initial ResNet model struggled to differentiate between **Hip-hop** and **Rock**, often confusing them due to their shared characteristic of strong, prominent beats.
+* **Solution:** 
+  * **Multi-Feature Fusion:** Recognized that spectral data alone was insufficient. I extracted **Tempograms** (visual representations of rhythmic patterns) alongside Mel-spectrograms.
+  * **Concatenation:** Modified the model architecture to concatenate these Tempograms as an additional input channel, allowing the AI to learn distinct rhythmic signatures effectively.
+
+### ☁️ 4. Handling Large Audio Uploads in Streamlit
+* **Problem:** Uploading high-fidelity (large) audio files caused the Streamlit browser interface to freeze due to inefficient buffer handling.
+* **Solution:** 
+  * Bypass the default uploader's memory bottleneck by implementing a **server-side temporary storage** mechanism.
+  * Configured a file size limit and optimized the data flow to pass file paths instead of loading entire raw audio binaries into the frontend memory.
