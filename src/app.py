@@ -8,7 +8,7 @@ import librosa
 from torchvision import transforms
 import matplotlib.pyplot as plt
 
-# 사용자 모듈 임포트
+# Import user modules
 from model import get_model
 from mixing_assistant import MixingEngineer
 from vocal_timbre_model import VocalTimbreCNN
@@ -33,12 +33,12 @@ SPOTIFY_GREEN = "#1DB954"
 SPOTIFY_RED = "#FF4B4B"
 HQ_SR = 44100
 
-# [CSS] 컴팩트 대시보드 + 타이포그래피 & 액션 카드 추가
+# [CSS] Compact Dashboard + Typography & Action Card additions
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;700&family=Oswald:wght@700&display=swap');
 
-    /* 1. 기본 설정 */
+    /* 1. Basic Settings */
     .stApp {{
         background-color: #121212 !important;
         color: #FFFFFF !important;
@@ -49,7 +49,7 @@ st.markdown(f"""
         padding-bottom: 2rem;
     }}
 
-    /* 2. 컴팩트 카드 (Metric Box) - 기존 유지 (90px) */
+    /* 2. Compact Card (Metric Box) - Existing (90px) */
     .metric-box {{
         background-color: #1E1E1E;
         border: 1px solid #333;
@@ -104,7 +104,7 @@ st.markdown(f"""
     }}
     .genre-value {{
         font-family: 'Oswald', sans-serif;
-        font-size: 64px; /* 타이포그래피 강조 */
+        font-size: 64px; /* Typography emphasis */
         font-weight: 700;
         color: {SPOTIFY_GREEN};
         line-height: 1.1;
@@ -135,17 +135,17 @@ st.markdown(f"""
     .mix-text {{ color: #FFF; font-size: 14px; font-weight: 500; }}
     .mix-sub {{ color: #888; font-size: 11px; margin-left: auto; }}
 
-    /* 5. 텍스트 헤더 여백 제거 */
+    /* 5. Remove text header margin */
     h3, h4 {{
         margin-bottom: 0.5rem !important;
         padding-top: 0 !important;
         color: white !important;
     }}
 
-    /* 6. Streamlit 기본 요소 */
+    /* 6. Streamlit default elements */
     [data-testid="stHeader"] {{ background: transparent; }}
 
-    /* 탭 스타일 */
+    /* Tab style */
     button[data-baseweb="tab"] {{
         background-color: transparent !important;
         color: #888 !important;
@@ -158,7 +158,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# HTML Card Generator (상단 4개 특징용)
+# HTML Card Generator (for top 4 features)
 def create_metric_card(label, value_percent):
     return f"""
     <div class="metric-box">
@@ -197,7 +197,7 @@ def create_mixing_card(type, text, subtext=""):
     """
 
 
-# [Chart] 컴팩트 차트
+# [Chart] Compact Chart
 def plot_compact_chart(data_dict):
     genres = list(data_dict.keys())
     probs = list(data_dict.values())
@@ -244,6 +244,7 @@ def load_core_models():
     timbre_model.eval()
 
     siamese_model = load_siamese_model(siamese_path)
+    # Build database index if processed data exists
     db_vectors = build_database_index(siamese_model, processed_dir) if os.path.exists(processed_dir) else {}
 
     feat_model = FeatureRegressor(num_features=4).to(DEVICE)
@@ -348,7 +349,7 @@ if uploaded_file is not None:
                 col_left, col_right = st.columns([1, 1])
 
                 with col_left:
-                    # [변경] create_genre_hero 적용 (큰 글씨)
+                    # [Change] Apply create_genre_hero (large typography)
                     conf = int(avg_probs[top3[0]] * 100)
                     st.markdown(create_genre_hero(st.session_state['top_genre'], conf), unsafe_allow_html=True)
 
@@ -410,7 +411,7 @@ if uploaded_file is not None:
                 else:
                     c1, c2 = st.columns([1, 1])
                     with c1:
-                        # [변경] 믹싱 카드 디자인 적용
+                        # [Change] Apply Mixing Card design
                         st.markdown("#### Action Plan")
                         for tip in mix_result['suggestions']:
                             if "Boost" in tip:
@@ -519,6 +520,7 @@ if uploaded_file is not None:
                             audio_data = timbre_sim.tensor_to_numpy(processed)
                             st.audio(audio_data, sample_rate=HQ_SR)
                     else:
+                        # Original audio playback
                         st.audio(vocal_path, format="audio/wav")
                 except Exception as e:
                     st.error(f"Playback Error: {e}")

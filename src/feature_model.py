@@ -7,16 +7,16 @@ class FeatureRegressor(nn.Module):
     def __init__(self, num_features=4):
         super(FeatureRegressor, self).__init__()
 
-        # 1. Pre-trained ResNet 로드
-        # 이미지넷 가중치 사용
+        # 1. Load Pre-trained ResNet
+        # Use ImageNet weights
         self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
 
-        # 마지막 레이어 제거
+        # Remove the final layer
         num_ftrs = self.backbone.fc.in_features
-        self.backbone.fc = nn.Identity()  # 512차원 벡터 출력
+        self.backbone.fc = nn.Identity()  # Outputs a 512-dimensional vector
 
         # 2. Regression Head
-        # 0~1 사이의 값을 예측해야 하므로 마지막에 Sigmoid 사용
+        # Use Sigmoid at the end since we must predict values between 0 and 1
         self.head = nn.Sequential(
             nn.Linear(num_ftrs, 256),
             nn.ReLU(),

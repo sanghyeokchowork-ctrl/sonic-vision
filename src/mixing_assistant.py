@@ -7,7 +7,7 @@ class MixingEngineer:
     def __init__(self, sample_rate=22050):
         self.sr = sample_rate
 
-        # 주파수 대역 정의 (Frequency Bands)
+        # Frequency Bands definition
         self.BANDS = {
             "Sub Bass": (20, 60),
             "Bass": (60, 250),
@@ -18,42 +18,42 @@ class MixingEngineer:
             "Brilliance": (6000, 20000)
         }
 
-        # 장르별 이상적인 밸런스 프로필 (Relative Energy Ratios)
-        # 값이 높을수록 해당 대역이 강조되어야 함
+        # Ideal Balance Profile per Genre (Relative Energy Ratios)
+        # Higher values mean that band should be emphasized
         self.GENRE_TARGETS = {
-            'hiphop': {'Sub Bass': 1.2, 'Bass': 1.1, 'Brilliance': 1.1},  # 킥/베이스 & 하이햇 강조
-            'pop': {'Bass': 1.0, 'Mids': 1.1, 'Presence': 1.1},  # 보컬(Mids/Presence) 강조
-            'rock': {'Low Mids': 1.1, 'Mids': 1.2, 'High Mids': 1.1},  # 기타 & 스네어 바디감
-            'jazz': {'Bass': 1.0, 'Low Mids': 1.0, 'Brilliance': 0.8},  # 따뜻하고 부드러운 톤
-            'classical': {'Sub Bass': 0.8, 'Brilliance': 0.9},  # 다이내믹하고 자연스러운 톤
+            'hiphop': {'Sub Bass': 1.2, 'Bass': 1.1, 'Brilliance': 1.1},  # Emphasize Kick/Bass & Hi-hats
+            'pop': {'Bass': 1.0, 'Mids': 1.1, 'Presence': 1.1},  # Emphasize Vocals (Mids/Presence)
+            'rock': {'Low Mids': 1.1, 'Mids': 1.2, 'High Mids': 1.1},  # Guitar & Snare body/punch
+            'jazz': {'Bass': 1.0, 'Low Mids': 1.0, 'Brilliance': 0.8},  # Warm and smooth tone
+            'classical': {'Sub Bass': 0.8, 'Brilliance': 0.9},  # Dynamic and natural tone
             'default': {'Sub Bass': 1.0, 'Bass': 1.0, 'Mids': 1.0, 'Brilliance': 1.0}
         }
 
     def analyze_frequency_balance(self, y):
         """
-        FFT를 사용하여 주파수 대역별 에너지를 분석합니다.
+        Analyzes the energy of each frequency band using FFT.
         """
         # Short-Time Fourier Transform
         spec = np.abs(librosa.stft(y))
         freqs = librosa.fft_frequencies(sr=self.sr)
 
-        # 전체 에너지 합계 (Normalize를 위해)
+        # Sum of total energy (for normalization)
         total_energy = np.sum(spec)
         if total_energy == 0: return {}
 
         band_energies = {}
 
         for band_name, (low_f, high_f) in self.BANDS.items():
-            # 해당 주파수 대역에 해당하는 Bin의 인덱스 찾기
+            # Find the indices of the Bins corresponding to the frequency band
             idx = np.where((freqs >= low_f) & (freqs <= high_f))[0]
             if len(idx) > 0:
-                # 해당 대역의 에너지 평균 계산
+                # Calculate the average energy of the band
                 avg_energy = np.mean(spec[idx, :])
                 band_energies[band_name] = avg_energy
             else:
                 band_energies[band_name] = 0
 
-        # 값 정규화 (전체 평균 대비 비율로 변환)
+        # Normalize values (convert to a ratio relative to the overall average)
         mean_val = np.mean(list(band_energies.values()))
         normalized_energies = {k: v / mean_val for k, v in band_energies.items()}
 
@@ -61,38 +61,38 @@ class MixingEngineer:
 
     def get_mixing_suggestions(self, file_path, detected_genre='pop'):
         """
-        오디오를 분석하고 장르에 맞는 EQ/Gain 조정을 제안합니다.
+        Analyzes the audio and suggests EQ/Gain adjustments suitable for the genre.
         """
         try:
-            y, _ = librosa.load(file_path, sr=self.sr, duration=60)  # 앞 60초 분석
+            y, _ = librosa.load(file_path, sr=self.sr, duration=60)  # Analyze the first 60 seconds
         except Exception as e:
             return {"error": str(e)}
 
-        # 1. 현재 곡의 밸런스 분석
+        # 1. Analyze the current track's balance
         current_balance = self.analyze_frequency_balance(y)
 
-        # 2. 목표 장르의 타겟 가져오기 (없으면 default)
+        # 2. Get the target for the detected genre (use default if not specified)
         target = self.GENRE_TARGETS.get(detected_genre, self.GENRE_TARGETS['default'])
 
         suggestions = []
         alert_level = "Green"  # Green, Yellow, Red
 
-        # 3. 비교 및 제안 생성
+        # 3. Compare and generate suggestions
         print(f"\n📊 Mixing Analysis for [{detected_genre.upper()}] style:")
 
         for band, current_val in current_balance.items():
-            # 타겟값이 명시되지 않은 대역은 기본값 1.0으로 처리
+            # Bands without an explicit target value default to 1.0
             target_val = target.get(band, 1.0)
 
-            # 비율 차이 계산
+            # Calculate the ratio difference
             ratio = current_val / target_val
 
-            # Threshold 설정 (너무 민감하지 않게)
-            # ratio > 1.2 : 너무 큼 (Cut 필요)
-            # ratio < 0.8 : 너무 작음 (Boost 필요)
+            # Set threshold (to avoid being too sensitive)
+            # ratio > 1.2 : Too high (Requires Cut)
+            # ratio < 0.8 : Too low (Requires Boost)
 
             if ratio > 1.25:
-                dB = 20 * np.log10(ratio)  # 대략적인 dB 환산
+                dB = 20 * np.log10(ratio)  # Approximate dB conversion
                 suggestions.append(f"🔻 **Cut {band}**: -{dB:.1f}dB (Too Boomy/Harsh)")
                 if dB > 3: alert_level = "Red"
 
@@ -101,7 +101,7 @@ class MixingEngineer:
                 suggestions.append(f"🔺 **Boost {band}**: +{dB:.1f}dB (Lacking energy)")
                 if dB > 3: alert_level = "Red"
 
-        # 4. 다이내믹 레인지 (LUFS/RMS 유사 개념) 간단 체크
+        # 4. Simple check of Dynamic Range (similar to LUFS/RMS concept)
         rms = librosa.feature.rms(y=y)[0]
         peak = np.max(np.abs(y))
         crest_factor = 20 * np.log10(peak / np.mean(rms))
@@ -130,13 +130,13 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
 
-    # 테스트용 파일 경로 (존재하는 파일로 변경해서 테스트하세요)
+    # Test file path (Change this to a file that exists for testing)
     test_song = os.path.join(project_root, "data", "my_songs", "9624 JAZZ CLUB AR.wav")
 
     if os.path.exists(test_song):
         engineer = MixingEngineer()
 
-        # 가상의 장르 'hiphop'으로 테스트
+        # Test with a hypothetical genre 'hiphop'
         result = engineer.get_mixing_suggestions(test_song, detected_genre='hiphop')
 
         print("\n💡 AI Mixing Tips:")

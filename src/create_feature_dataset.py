@@ -4,10 +4,9 @@ import librosa
 from tqdm import tqdm
 from feature_utils import extract_advanced_features
 
-# 설정
+# Configuration
 SAMPLE_RATE = 22050
-DURATION = 3  # 3초 단위로 잘라서 학습 (데이터 증강)
-
+DURATION = 3  # Slice duration for training (data augmentation)
 
 def create_dataset():
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,11 +30,11 @@ def create_dataset():
         for f in tqdm(files, desc=f"Processing {genre}"):
             file_path = os.path.join(genre_dir, f)
             try:
-                # 전체 곡 로드
+                # Load the full song
                 y, sr = librosa.load(file_path, sr=SAMPLE_RATE, duration=30)
 
-                # 3초씩 슬라이딩하며 데이터 생성 (한 곡당 10개의 데이터)
-                # 이렇게 해야 "순간적인" 에너지나 리듬을 학습할 수 있음
+                # Generate data by sliding 3-second windows (10 samples per song)
+                # This approach allows the model to learn "instantaneous" energy and rhythm.
                 samples_per_slice = SAMPLE_RATE * DURATION
                 num_slices = int(len(y) / samples_per_slice)
 
@@ -46,11 +45,12 @@ def create_dataset():
 
                     if len(y_slice) < samples_per_slice: continue
 
-                    # 고급 특징 추출
+                    # Extract advanced features
                     feats = extract_advanced_features(y_slice, sr)
 
-                    # 파일명: genre.00000_slice0.png (이미지 파일명과 매칭되게 저장)
-                    # 실제로는 wav를 분석했지만, 학습은 spectrogram 이미지로 할 것이므로 이름 규칙 통일
+                    # Filename format: genre.00000_slice0.png (Match the image filename convention)
+                    # Although we analyzed the WAV file, we use this naming convention because the model
+                    # will ultimately be trained using spectrogram images.
                     img_name = f"{f[:-4]}_slice{i}.png"
 
                     row = {"filename": img_name, "genre": genre}

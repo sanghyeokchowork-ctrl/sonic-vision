@@ -5,7 +5,7 @@ import numpy as np
 
 
 class TimbreSimulator:
-    def __init__(self, sample_rate=44100):  # [변경] 22050 -> 44100 (CD 음질)
+    def __init__(self, sample_rate=44100):  # [Change] 22050 -> 44100 (CD quality)
         self.sr = sample_rate
 
     def apply_style(self, waveform, style):
@@ -13,17 +13,17 @@ class TimbreSimulator:
         High-Quality DSP Processing
         Input: (Channels, Time) Tensor
         """
-        # Tensor 변환
+        # Convert to Tensor
         if not isinstance(waveform, torch.Tensor):
             waveform = torch.tensor(waveform)
 
-        # 차원 확인 (1, Time)
+        # Check dimensions (expect (1, Time))
         if waveform.dim() == 1:
             waveform = waveform.unsqueeze(0)
 
-        # 스타일별 DSP (게인 값을 조금 더 자연스럽게 조정)
+        # DSP based on style (gain values slightly adjusted for natural sound)
         if style == "Bright":
-            # High Shelf: 6kHz 이상 부스트
+            # High Shelf: Boost above 6kHz
             processed = F.highpass_biquad(waveform, self.sr, cutoff_freq=2000.0, Q=0.7)
             processed = F.equalizer_biquad(processed, self.sr, center_freq=8000, gain=6.0, Q=0.707)
             return processed
@@ -58,17 +58,17 @@ class TimbreSimulator:
 
     def tensor_to_numpy(self, waveform):
         """
-        Streamlit 재생을 위한 고음질 변환 (Headroom 확보)
+        High-quality conversion for Streamlit playback (securing headroom)
         """
         audio_np = waveform.detach().cpu().numpy()
 
         if audio_np.ndim > 1:
             audio_np = audio_np.flatten()
 
-        # 피크 정규화 (소리 깨짐 방지)
+        # Peak normalization (prevents clipping/distortion)
         max_val = np.abs(audio_np).max()
         if max_val > 0:
-            # 0.95로 설정하여 헤드룸을 약간 남김
+            # Set to 0.95 to leave a little headroom
             audio_np = audio_np / max_val * 0.95
 
         return audio_np

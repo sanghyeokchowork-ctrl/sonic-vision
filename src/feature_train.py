@@ -9,7 +9,7 @@ from torchvision import transforms
 from tqdm import tqdm
 from feature_model import FeatureRegressor
 
-# 설정
+# Configuration
 BATCH_SIZE = 32
 EPOCHS = 10
 LR = 0.001
@@ -32,7 +32,7 @@ class FeatureDataset(Dataset):
     def __getitem__(self, idx):
         row = self.data.iloc[idx]
 
-        # 이미지 경로 찾기 (genre 폴더 안에 있음)
+        # Find image path (located inside the genre folder)
         img_name = row['filename']
         genre = row['genre']
         img_path = os.path.join(self.img_root, genre, img_name)
@@ -40,7 +40,7 @@ class FeatureDataset(Dataset):
         image = Image.open(img_path).convert('RGB')
         image = self.transform(image)
 
-        # 타겟 값 (Energy, Danceability, Acousticness, Valence)
+        # Target values (Energy, Danceability, Acousticness, Valence)
         targets = torch.tensor([
             row['energy'],
             row['danceability'],
@@ -69,7 +69,7 @@ def train():
 
     # 2. Model
     model = FeatureRegressor(num_features=4).to(DEVICE)
-    criterion = nn.MSELoss()  # 회귀 문제이므로 MSE 사용
+    criterion = nn.MSELoss()  # Use MSE since this is a regression problem
     optimizer = optim.Adam(model.parameters(), lr=LR)
 
     print(f"🚀 Training Feature Regressor on {DEVICE}...")

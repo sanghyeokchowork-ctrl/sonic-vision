@@ -13,16 +13,18 @@ from model import get_model
 # ==========================================
 # Configuration
 # ==========================================
-NUM_EPOCHS = 10  # 전체 데이터를 몇 번 볼 것인가
-LEARNING_RATE = 0.001  # 학습 속도
-DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"  # Mac GPU 사용
+NUM_EPOCHS = 10  # How many times to see the entire dataset
+LEARNING_RATE = 0.001  # Learning rate
+DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"  # Use Mac GPU (MPS) if available
 
 
 def train_model():
     # 1. Setup Directories
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
+    # Define path to processed data
     data_path = os.path.join(project_root, 'data', 'processed')
+    # Define path to save the best model weights
     model_save_path = os.path.join(project_root, 'models', 'best_model.pth')
 
     # Create models directory if not exists
@@ -31,7 +33,9 @@ def train_model():
     print(f"🚀 Training Started on Device: {DEVICE}")
 
     # 2. Get Data & Model
+    # Load training and validation data loaders, and class names
     train_loader, val_loader, class_names = get_data_loaders(data_path)
+    # Instantiate the model and move it to the device
     model = get_model(num_classes=len(class_names), device=DEVICE)
 
     # 3. Define Loss Function & Optimizer
@@ -40,6 +44,7 @@ def train_model():
 
     # Track best accuracy
     best_acc = 0.0
+    # Deep copy the initial model weights for saving the best state
     best_model_wts = copy.deepcopy(model.state_dict())
 
     # 4. Training Loop
@@ -66,6 +71,7 @@ def train_model():
             pbar = tqdm(dataloader, desc=f"{phase.upper()} Phase", leave=False)
 
             for inputs, labels in pbar:
+                # Move inputs and labels to the designated device
                 inputs = inputs.to(DEVICE)
                 labels = labels.to(DEVICE)
 
@@ -73,10 +79,10 @@ def train_model():
                 optimizer.zero_grad()
 
                 # Forward
-                # Track history if only in train
+                # Track history/compute gradients only if in train phase
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
-                    _, preds = torch.max(outputs, 1)
+                    _, preds = torch.max(outputs, 1) # Get the predicted class index
                     loss = criterion(outputs, labels)
 
                     # Backward + Optimize only if in training phase
@@ -84,31 +90,11 @@ def train_model():
                         loss.backward()
                         optimizer.step()
 
-                # Statistics
+                # Statistics (accumulate loss and correct predictions)
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
 
-                # Update progress bar description with current loss
+                # Update progress bar description with current batch loss
                 pbar.set_postfix({'loss': loss.item()})
 
-            epoch_loss = running_loss / len(dataloader.dataset)
-            epoch_acc = running_corrects.float() / len(dataloader.dataset)
-
-            print(f'{phase.upper()} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
-
-            # Deep copy the model if it's the best one so far
-            if phase == 'val' and epoch_acc > best_acc:
-                best_acc = epoch_acc
-                best_model_wts = copy.deepcopy(model.state_dict())
-                torch.save(model.state_dict(), model_save_path)
-                print(f"   🎉 New Best Model Saved! (Acc: {best_acc:.4f})")
-
-    time_elapsed = time.time() - start_time
-    print('=' * 50)
-    print(f'Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
-    print(f'Best val Acc: {best_acc:4f}')
-    print('=' * 50)
-
-
-if __name__ == "__main__":
-    train_model()
+            # Calculate average loss and accuracy for
