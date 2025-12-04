@@ -70,6 +70,7 @@ cd sonic-vision
 
 # 2. Install dependencies
 pip install -r requirements.txt
+```
 
 ## 6. Challenges & Technical Solutions
 
